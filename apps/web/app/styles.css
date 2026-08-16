@@ -1,7 +1,9 @@
+@import '@serein/design-tokens/web.css';
+
 :root {
-  color: #15231d;
-  background: #f5f3ec;
-  font-family: Georgia, 'Times New Roman', serif;
+  background: var(--serein-color-surface);
+  color: var(--serein-color-text);
+  font-family: var(--serein-font-ui);
 }
 
 * {
@@ -10,33 +12,184 @@
 
 body {
   margin: 0;
+  background: var(--serein-color-surface);
 }
 
-main {
-  display: grid;
-  min-height: 100vh;
-  max-width: 44rem;
-  align-content: center;
-  gap: 1.25rem;
-  margin: auto;
-  padding: 2rem;
+a {
+  color: inherit;
 }
 
 h1,
+h2,
+h3,
 p {
   margin: 0;
 }
 
-h1 {
-  font-size: clamp(2.4rem, 6vw, 4.5rem);
-  font-weight: 500;
-  line-height: 0.98;
+:focus-visible {
+  outline: 3px solid var(--serein-color-focus);
+  outline-offset: 3px;
 }
 
-main > p:last-child {
-  max-width: 36rem;
-  color: #41564a;
-  font-family: ui-sans-serif, system-ui, sans-serif;
-  font-size: 1.05rem;
+.skip-link {
+  position: fixed;
+  top: var(--serein-space-2);
+  left: var(--serein-space-2);
+  z-index: 1;
+  padding: var(--serein-space-2) var(--serein-space-3);
+  border-radius: var(--serein-radius-control);
+  background: var(--serein-color-text);
+  color: var(--serein-color-surface);
+  transform: translateY(-200%);
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
+.foundation {
+  display: grid;
+  max-width: 72rem;
+  gap: var(--serein-space-12);
+  margin: auto;
+  padding: var(--serein-space-16) var(--serein-space-6);
+}
+
+.eyebrow {
+  color: var(--serein-accent);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.foundation h1 {
+  max-width: 52rem;
+  font-size: clamp(3rem, 8vw, 6.5rem);
+  font-weight: 500;
+  letter-spacing: -0.065em;
+  line-height: 0.9;
+}
+
+.lede {
+  max-width: 42rem;
+  color: var(--serein-color-text-muted);
+  font-size: 1.125rem;
+  line-height: 1.55;
+}
+
+.state-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: var(--serein-space-4);
+}
+
+.state-card {
+  display: grid;
+  gap: var(--serein-space-4);
+  padding: var(--serein-space-6);
+  border: 1px solid var(--serein-color-border);
+  border-radius: var(--serein-radius-card);
+  background: var(--serein-color-surface-raised);
+  box-shadow: var(--serein-shadow-floating);
+}
+
+.state-card p {
+  color: var(--serein-color-text-muted);
   line-height: 1.5;
+}
+
+.button {
+  min-height: 2.75rem;
+  padding: var(--serein-space-2) var(--serein-space-4);
+  border: 1px solid transparent;
+  border-radius: var(--serein-radius-control);
+  color: #fff;
+  background: var(--serein-color-action);
+  font: inherit;
+  font-weight: 600;
+  transition: background-color var(--serein-duration-micro) var(--serein-ease-standard);
+}
+
+.button:hover:not(:disabled) {
+  background: var(--serein-color-action-pressed);
+}
+
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.field {
+  display: grid;
+  gap: var(--serein-space-2);
+}
+
+.field input {
+  min-height: 2.75rem;
+  padding: var(--serein-space-2) var(--serein-space-3);
+  border: 1px solid var(--serein-color-border);
+  border-radius: var(--serein-radius-field);
+  color: var(--serein-color-text);
+  background: var(--serein-color-surface);
+  font: inherit;
+}
+
+.field[data-invalid='true'] input {
+  border-color: var(--serein-color-danger);
+}
+
+.field-error {
+  color: var(--serein-color-danger);
+  font-size: 0.875rem;
+}
+
+.status-list {
+  display: grid;
+  gap: var(--serein-space-2);
+}
+
+.status {
+  display: flex;
+  gap: var(--serein-space-2);
+  align-items: center;
+  width: fit-content;
+  padding: var(--serein-space-2) var(--serein-space-3);
+  border-radius: var(--serein-radius-pill);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.status::before {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: currentColor;
+  content: '';
+}
+
+.status[data-tone='success'] {
+  color: var(--serein-color-success);
+  background: var(--serein-color-success-surface);
+}
+
+.status[data-tone='warning'] {
+  color: var(--serein-color-warning);
+  background: var(--serein-color-warning-surface);
+}
+
+.status[data-tone='info'] {
+  color: var(--serein-color-info);
+  background: var(--serein-color-info-surface);
+}
+
+.status[data-tone='danger'] {
+  color: var(--serein-color-danger);
+  background: var(--serein-color-danger-surface);
+}
+
+@media (max-width: 40rem) {
+  .foundation {
+    padding: var(--serein-space-8) var(--serein-space-4);
+  }
 }

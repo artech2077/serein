@@ -1,6 +1,8 @@
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView, StyleSheet, Text, View } from 'react-native';
 
+import { nativeTokens } from '@serein/design-tokens/native';
+
 export default function App() {
   return (
     <SafeAreaView style={styles.screen}>
@@ -8,10 +10,14 @@ export default function App() {
         <Text accessibilityRole="header" style={styles.wordmark}>
           Serein
         </Text>
-        <Text style={styles.heading}>Your financial workspace is being prepared.</Text>
+        <Text style={styles.heading}>Calm, exact, and accessible by default.</Text>
         <Text style={styles.body}>
-          This private view will show your authoritative daily allowance when setup is complete.
+          Every financial value will preserve its status, freshness, and recovery action.
         </Text>
+        <View accessibilityLabel="Updated now. Current financial data." style={styles.status}>
+          <View style={styles.statusDot} />
+          <Text style={styles.statusText}>Updated now</Text>
+        </View>
       </View>
       <StatusBar style="dark" />
     </SafeAreaView>
@@ -20,29 +26,49 @@ export default function App() {
 
 const styles = StyleSheet.create({
   body: {
-    color: '#41564a',
-    fontSize: 17,
-    lineHeight: 25,
+    color: nativeTokens.light.textMuted,
+    fontSize: nativeTokens.typography.body,
+    lineHeight: nativeTokens.typography.bodyLineHeight,
   },
   content: {
-    gap: 20,
-    padding: 24,
+    gap: nativeTokens.space[6],
+    padding: nativeTokens.space[6],
   },
   heading: {
-    color: '#15231d',
-    fontSize: 38,
+    color: nativeTokens.light.text,
+    fontSize: nativeTokens.typography.heading,
     fontWeight: '500',
     letterSpacing: -0.7,
-    lineHeight: 42,
+    lineHeight: nativeTokens.typography.headingLineHeight,
   },
   screen: {
-    backgroundColor: '#f5f3ec',
+    backgroundColor: nativeTokens.light.surface,
     flex: 1,
     justifyContent: 'center',
   },
+  status: {
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: nativeTokens.light.successSurface,
+    borderRadius: nativeTokens.radius.pill,
+    flexDirection: 'row',
+    gap: nativeTokens.space[2],
+    minHeight: 44,
+    paddingHorizontal: nativeTokens.space[3],
+  },
+  statusDot: {
+    backgroundColor: nativeTokens.light.success,
+    borderRadius: 4,
+    height: 8,
+    width: 8,
+  },
+  statusText: {
+    color: nativeTokens.light.success,
+    fontSize: 15,
+    fontWeight: '600',
+  },
   wordmark: {
-    color: '#15231d',
-    fontFamily: 'Georgia',
+    color: nativeTokens.light.text,
     fontSize: 23,
   },
 });

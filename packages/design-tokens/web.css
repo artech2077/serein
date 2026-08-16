@@ -1,0 +1,92 @@
+@import '@fontsource-variable/jost';
+
+:root {
+  color-scheme: light;
+
+  --serein-ink: #0b1320;
+  --serein-ink-soft: #50647c;
+  --serein-blue: #315a8d;
+  --serein-blue-deep: #14253d;
+  --serein-steel: #8ea2b8;
+  --serein-ice-tint: #e8eef4;
+  --serein-accent: #2d65ed;
+  --serein-paper: #f8fafc;
+  --serein-white: #ffffff;
+  --serein-line: #d9e1ea;
+
+  --serein-color-surface: var(--serein-paper);
+  --serein-color-surface-raised: var(--serein-white);
+  --serein-color-surface-muted: #eff4f8;
+  --serein-color-text: var(--serein-ink);
+  --serein-color-text-muted: var(--serein-ink-soft);
+  --serein-color-border: var(--serein-line);
+  --serein-color-focus: var(--serein-accent);
+  --serein-color-action: var(--serein-blue-deep);
+  --serein-color-action-pressed: #0f1f35;
+  --serein-color-success: #1d7565;
+  --serein-color-success-surface: #e5f1ee;
+  --serein-color-warning: #95590f;
+  --serein-color-warning-surface: #fbf0df;
+  --serein-color-danger: #b4232f;
+  --serein-color-danger-surface: #fce9ea;
+  --serein-color-info: var(--serein-accent);
+  --serein-color-info-surface: #e8eefb;
+
+  --serein-font-ui: 'Jost Variable', Jost, ui-sans-serif, system-ui, sans-serif;
+  --serein-font-mono: 'SFMono-Regular', Consolas, monospace;
+  --serein-font-money: var(--serein-font-ui);
+
+  --serein-space-1: 0.25rem;
+  --serein-space-2: 0.5rem;
+  --serein-space-3: 0.75rem;
+  --serein-space-4: 1rem;
+  --serein-space-6: 1.5rem;
+  --serein-space-8: 2rem;
+  --serein-space-12: 3rem;
+  --serein-space-16: 4rem;
+
+  --serein-radius-control: 0.5rem;
+  --serein-radius-field: 0.75rem;
+  --serein-radius-card: 1rem;
+  --serein-radius-sheet: 1.75rem;
+  --serein-radius-pill: 999px;
+  --serein-shadow-floating: 0 1px 2px rgb(11 19 32 / 5%), 0 12px 32px rgb(11 19 32 / 5.5%);
+  --serein-shadow-sheet: 0 20px 64px rgb(11 19 32 / 16%);
+
+  --serein-duration-press: 100ms;
+  --serein-duration-micro: 180ms;
+  --serein-duration-route: 320ms;
+  --serein-ease-standard: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --serein-color-surface: #08111f;
+  --serein-color-surface-raised: #101c2c;
+  --serein-color-surface-muted: #18273a;
+  --serein-color-text: #f7f9fc;
+  --serein-color-text-muted: #a8b6c7;
+  --serein-color-border: #2b3c50;
+  --serein-color-focus: #6e9aff;
+  --serein-color-action: var(--serein-blue);
+  --serein-color-action-pressed: #3b6ba4;
+  --serein-color-success: #63bea8;
+  --serein-color-success-surface: #14362f;
+  --serein-color-warning: #e6ad63;
+  --serein-color-warning-surface: #3d2a12;
+  --serein-color-danger: #ff838b;
+  --serein-color-danger-surface: #431d27;
+  --serein-color-info: #83a8ff;
+  --serein-color-info-surface: #1b3047;
+  --serein-shadow-floating: 0 1px 2px rgb(0 0 0 / 18%), 0 12px 34px rgb(0 0 0 / 16%);
+  --serein-shadow-sheet: 0 24px 70px rgb(0 0 0 / 28%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --serein-duration-press: 0ms;
+    --serein-duration-micro: 0ms;
+    --serein-duration-route: 0ms;
+  }
+}
