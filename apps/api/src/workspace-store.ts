@@ -28,8 +28,15 @@ export class WorkspaceVersionConflictError extends Error {
 }
 
 export interface WorkspaceStore {
-  execute(subject: string, request: WorkspaceCommandRequest): WorkspaceCommandResponse;
-  getProjection(subject: string): WorkspaceProjection;
+  execute(
+    subject: string,
+    request: WorkspaceCommandRequest,
+    accessToken?: string,
+  ): WorkspaceCommandResponse | Promise<WorkspaceCommandResponse>;
+  getProjection(
+    subject: string,
+    accessToken?: string,
+  ): WorkspaceProjection | Promise<WorkspaceProjection>;
 }
 
 interface AppliedCommand {

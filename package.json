@@ -14,14 +14,20 @@
     "format:write": "prettier --write .",
     "lint": "eslint .",
     "test": "turbo run test",
+    "test:convex": "vitest run --config vitest.config.mts",
     "typecheck": "turbo run typecheck"
   },
   "devDependencies": {
+    "@edge-runtime/vm": "5.0.0",
     "@eslint/js": "^9.39.1",
+    "@types/node": "22.19.1",
+    "convex": "1.44.0",
+    "convex-test": "0.0.55",
     "eslint": "^9.39.1",
     "prettier": "^3.9.0",
     "turbo": "^2.10.10",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.48.0"
+    "typescript-eslint": "^8.48.0",
+    "vitest": "4.1.10"
   }
 }

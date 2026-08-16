@@ -8,9 +8,9 @@ import {
   type AccessTokenVerifier,
   type AuthenticatedIdentity,
 } from './auth.js';
+import { ConvexWorkspaceStore, getConvexUrl } from './convex-workspace-store.js';
 import {
   IdempotencyKeyConflictError,
-  InMemoryWorkspaceStore,
   WorkspaceAlreadyInitializedError,
   WorkspaceVersionConflictError,
   type WorkspaceStore,
@@ -25,7 +25,9 @@ export interface BuildAppOptions {
 
 export function buildApp(options: BuildAppOptions = {}) {
   const app = Fastify({ logger: true });
-  const workspaceStore = options.workspaceStore ?? new InMemoryWorkspaceStore();
+  const convexUrl = getConvexUrl();
+  const workspaceStore =
+    options.workspaceStore ?? (convexUrl ? new ConvexWorkspaceStore(convexUrl) : undefined);
   const accessTokenVerifier =
     options.accessTokenVerifier ??
     (() => {
@@ -40,27 +42,36 @@ export function buildApp(options: BuildAppOptions = {}) {
   }));
 
   app.get('/v1/workspace', async (request, reply) => {
-    const identity = await authenticate(request.headers.authorization, reply);
+    const authenticatedRequest = await authenticate(request.headers.authorization, reply);
 
-    if (!identity) {
+    if (!authenticatedRequest) {
       return;
     }
 
-    if (!requireScope(identity, 'read:workspace', reply)) {
+    if (!requireScope(authenticatedRequest.identity, 'read:workspace', reply)) {
       return;
     }
 
-    return workspaceStore.getProjection(identity.subject);
+    if (!workspaceStore) {
+      return reply
+        .code(503)
+        .send(problem('workspace_not_configured', 'Configure the Convex workspace store.'));
+    }
+
+    return workspaceStore.getProjection(
+      authenticatedRequest.identity.subject,
+      authenticatedRequest.accessToken,
+    );
   });
 
   app.post('/v1/workspace/commands', async (request, reply) => {
-    const identity = await authenticate(request.headers.authorization, reply);
+    const authenticatedRequest = await authenticate(request.headers.authorization, reply);
 
-    if (!identity) {
+    if (!authenticatedRequest) {
       return;
     }
 
-    if (!requireScope(identity, 'write:workspace', reply)) {
+    if (!requireScope(authenticatedRequest.identity, 'write:workspace', reply)) {
       return;
     }
 
@@ -72,8 +83,18 @@ export function buildApp(options: BuildAppOptions = {}) {
         .send(problem('invalid_command', 'Provide a valid versioned workspace command.'));
     }
 
+    if (!workspaceStore) {
+      return reply
+        .code(503)
+        .send(problem('workspace_not_configured', 'Configure the Convex workspace store.'));
+    }
+
     try {
-      const result = workspaceStore.execute(identity.subject, command);
+      const result = await workspaceStore.execute(
+        authenticatedRequest.identity.subject,
+        command,
+        authenticatedRequest.accessToken,
+      );
       return reply.code(result.outcome === 'applied' ? 201 : 200).send(result);
     } catch (error) {
       if (error instanceof WorkspaceVersionConflictError) {
@@ -100,7 +121,7 @@ export function buildApp(options: BuildAppOptions = {}) {
   async function authenticate(
     authorization: string | undefined,
     reply: { code(statusCode: number): { send(payload: ApiProblem): unknown } },
-  ): Promise<AuthenticatedIdentity | undefined> {
+  ): Promise<{ accessToken: string; identity: AuthenticatedIdentity } | undefined> {
     const accessToken = getBearerToken(authorization);
 
     if (!accessToken) {
@@ -116,7 +137,7 @@ export function buildApp(options: BuildAppOptions = {}) {
     }
 
     try {
-      return await accessTokenVerifier.verify(accessToken);
+      return { accessToken, identity: await accessTokenVerifier.verify(accessToken) };
     } catch {
       reply.code(401).send(problem('invalid_access_token', 'The Bearer access token is invalid.'));
       return undefined;

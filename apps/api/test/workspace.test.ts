@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { AccessTokenVerifier } from '../src/auth.js';
 import { buildApp } from '../src/app.js';
+import { InMemoryWorkspaceStore } from '../src/workspace-store.js';
 
 const readToken = 'read-token';
 const writeToken = 'write-token';
@@ -39,7 +40,7 @@ function buildTestApp() {
     }),
   };
 
-  return buildApp({ accessTokenVerifier });
+  return buildApp({ accessTokenVerifier, workspaceStore: new InMemoryWorkspaceStore() });
 }
 
 function bearer(token: string) {
@@ -85,6 +86,26 @@ describe('workspace authorization boundary', () => {
     expect(writeOnlyRead.json()).toMatchObject({ error: { code: 'insufficient_scope' } });
     expect(readOnlyCommand.statusCode).toBe(403);
     expect(readOnlyCommand.json()).toMatchObject({ error: { code: 'insufficient_scope' } });
+  });
+
+  it('does not fall back to volatile in-memory storage outside tests', async () => {
+    const accessTokenVerifier: AccessTokenVerifier = {
+      verify: vi.fn(async () => ({
+        scopes: new Set(['read:workspace']),
+        subject: 'auth0|primary-user',
+      })),
+    };
+    const app = buildApp({ accessTokenVerifier });
+    apps.push(app);
+
+    const response = await app.inject({
+      headers: bearer(fullToken),
+      method: 'GET',
+      url: '/v1/workspace',
+    });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toMatchObject({ error: { code: 'workspace_not_configured' } });
   });
 
   it('keeps finance workspaces private to the validated Auth0 subject', async () => {
