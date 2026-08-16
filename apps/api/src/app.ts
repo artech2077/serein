@@ -3,6 +3,7 @@ import Fastify from 'fastify';
 import type {
   AccountCoverageState,
   ApiProblem,
+  ConfirmedTransactionClassification,
   CsvImportRequest,
   HealthResponse,
   WorkspaceCommandRequest,
@@ -15,6 +16,10 @@ import {
   type AuthenticatedIdentity,
 } from './auth.js';
 import { ConvexWorkspaceStore, getConvexUrl } from './convex-workspace-store.js';
+import {
+  ConvexFinanceClassificationStore,
+  type FinanceClassificationStore,
+} from './finance-classification-store.js';
 import { ConvexFinanceImportStore, type FinanceImportStore } from './finance-import-store.js';
 import {
   IdempotencyKeyConflictError,
@@ -27,6 +32,7 @@ const API_VERSION = 'v1' as const;
 
 export interface BuildAppOptions {
   accessTokenVerifier?: AccessTokenVerifier;
+  financeClassificationStore?: FinanceClassificationStore;
   financeImportStore?: FinanceImportStore;
   workspaceStore?: WorkspaceStore;
 }
@@ -38,6 +44,9 @@ export function buildApp(options: BuildAppOptions = {}) {
     options.workspaceStore ?? (convexUrl ? new ConvexWorkspaceStore(convexUrl) : undefined);
   const financeImportStore =
     options.financeImportStore ?? (convexUrl ? new ConvexFinanceImportStore(convexUrl) : undefined);
+  const financeClassificationStore =
+    options.financeClassificationStore ??
+    (convexUrl ? new ConvexFinanceClassificationStore(convexUrl) : undefined);
   const accessTokenVerifier =
     options.accessTokenVerifier ??
     (() => {
@@ -235,6 +244,79 @@ export function buildApp(options: BuildAppOptions = {}) {
     );
   });
 
+  app.get('/v1/transactions/review', async (request, reply) => {
+    const authenticatedRequest = await authenticate(request.headers.authorization, reply);
+    if (
+      !authenticatedRequest ||
+      !requireScope(authenticatedRequest.identity, 'read:workspace', reply)
+    ) {
+      return;
+    }
+    if (!financeClassificationStore) {
+      return reply
+        .code(503)
+        .send(problem('workspace_not_configured', 'Configure the Convex workspace store.'));
+    }
+    return financeClassificationStore.getMaterialReviewQueue(
+      authenticatedRequest.identity.subject,
+      authenticatedRequest.accessToken,
+    );
+  });
+
+  app.post('/v1/transactions/:transactionId/classification', async (request, reply) => {
+    const authenticatedRequest = await authenticate(request.headers.authorization, reply);
+    if (
+      !authenticatedRequest ||
+      !requireScope(authenticatedRequest.identity, 'write:workspace', reply)
+    ) {
+      return;
+    }
+    const classification = parseClassification(request.body);
+    const transactionId = parseRouteId(request.params);
+    if (!classification || !transactionId) {
+      return reply
+        .code(400)
+        .send(problem('invalid_classification', 'Provide a valid transaction classification.'));
+    }
+    if (!financeClassificationStore) {
+      return reply
+        .code(503)
+        .send(problem('workspace_not_configured', 'Configure the Convex workspace store.'));
+    }
+    return financeClassificationStore.confirmClassification(
+      authenticatedRequest.identity.subject,
+      { classification, transactionId },
+      authenticatedRequest.accessToken,
+    );
+  });
+
+  app.post('/v1/transactions/:transactionId/merchant-correction', async (request, reply) => {
+    const authenticatedRequest = await authenticate(request.headers.authorization, reply);
+    if (
+      !authenticatedRequest ||
+      !requireScope(authenticatedRequest.identity, 'write:workspace', reply)
+    ) {
+      return;
+    }
+    const transactionId = parseRouteId(request.params);
+    const correction = parseMerchantCorrection(request.body);
+    if (!transactionId || !correction) {
+      return reply
+        .code(400)
+        .send(problem('invalid_merchant_correction', 'Provide a valid merchant correction.'));
+    }
+    if (!financeClassificationStore) {
+      return reply
+        .code(503)
+        .send(problem('workspace_not_configured', 'Configure the Convex workspace store.'));
+    }
+    return financeClassificationStore.correctMerchant(
+      authenticatedRequest.identity.subject,
+      { ...correction, transactionId },
+      authenticatedRequest.accessToken,
+    );
+  });
+
   async function authenticate(
     authorization: string | undefined,
     reply: { code(statusCode: number): { send(payload: ApiProblem): unknown } },
@@ -379,6 +461,49 @@ function parseCoverageAccount(body: unknown):
     accountName: body.accountName as string,
     state: body.state,
   };
+}
+
+function parseClassification(body: unknown): ConfirmedTransactionClassification | undefined {
+  if (!isRecord(body) || Object.keys(body).length !== 1) {
+    return undefined;
+  }
+  return isConfirmedClassification(body.classification) ? body.classification : undefined;
+}
+
+function parseMerchantCorrection(body: unknown):
+  | {
+      classification: ConfirmedTransactionClassification;
+      scope: 'one_time' | 'retrospective' | 'prospective';
+    }
+  | undefined {
+  if (
+    !isRecord(body) ||
+    Object.keys(body).length !== 2 ||
+    !isConfirmedClassification(body.classification)
+  ) {
+    return undefined;
+  }
+  if (body.scope !== 'one_time' && body.scope !== 'retrospective' && body.scope !== 'prospective') {
+    return undefined;
+  }
+  return { classification: body.classification, scope: body.scope };
+}
+
+function isConfirmedClassification(value: unknown): value is ConfirmedTransactionClassification {
+  return (
+    value === 'discretionary' || value === 'essential' || value === 'transfer' || value === 'refund'
+  );
+}
+
+function parseRouteId(params: unknown): string | undefined {
+  if (
+    !isRecord(params) ||
+    typeof params.transactionId !== 'string' ||
+    params.transactionId.length === 0
+  ) {
+    return undefined;
+  }
+  return params.transactionId;
 }
 
 function isValidAccountFields(body: Record<string, unknown>): boolean {

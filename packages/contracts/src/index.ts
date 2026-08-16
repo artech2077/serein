@@ -65,6 +65,21 @@ export interface AllowanceCoverage {
   missingAccountExternalIds: readonly string[];
 }
 
+export type ConfirmedTransactionClassification =
+  'discretionary' | 'essential' | 'transfer' | 'refund';
+
+export interface MaterialReviewItem {
+  amountCents: number;
+  bookingDate: string;
+  sourceDescription: string;
+  transactionId: string;
+}
+
+export interface MaterialReviewQueue {
+  items: readonly MaterialReviewItem[];
+  unresolvedDebitCents: number;
+}
+
 export interface ApiProblem {
   error: {
     code: string;

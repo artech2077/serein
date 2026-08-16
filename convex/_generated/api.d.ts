@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as classifications from "../classifications.js";
 import type * as imports from "../imports.js";
 import type * as workspaces from "../workspaces.js";
 
@@ -18,6 +19,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  classifications: typeof classifications;
   imports: typeof imports;
   workspaces: typeof workspaces;
 }>;

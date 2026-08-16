@@ -89,10 +89,24 @@ export const importCsv = mutation({
         continue;
       }
 
+      const merchantKey = merchantKeyFor(row.sourceDescription);
+      const merchantRule = await ctx.db
+        .query('merchantRules')
+        .withIndex('by_subject_and_merchant_key', (index) =>
+          index.eq('subject', subject).eq('merchantKey', merchantKey),
+        )
+        .unique();
+      const defaultClassification =
+        merchantRule?.classification ?? defaultClassificationFor(row.amountCents);
+
       await ctx.db.insert('importedTransactions', {
         accountId: account._id,
         amountCents: row.amountCents,
         bookingDate: row.bookingDate,
+        classification: defaultClassification,
+        classificationState:
+          defaultClassification === 'unknown_debit' ? 'review_required' : 'confirmed',
+        merchantKey,
         sourceDescription: row.sourceDescription,
         sourceFingerprint,
         subject,
@@ -437,4 +451,12 @@ async function workspaceIdForSubject(subject: string): Promise<string> {
 async function fingerprint(value: string): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function merchantKeyFor(description: string): string {
+  return description.trim().toLocaleLowerCase().replace(/\s+/g, ' ');
+}
+
+function defaultClassificationFor(amountCents: number): 'unknown_debit' | 'income' {
+  return amountCents < 0 ? 'unknown_debit' : 'income';
 }

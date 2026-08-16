@@ -32,10 +32,32 @@ export default defineSchema({
     accountId: v.id('financeAccounts'),
     amountCents: v.number(),
     bookingDate: v.string(),
+    classification: v.union(
+      v.literal('unknown_debit'),
+      v.literal('income'),
+      v.literal('discretionary'),
+      v.literal('essential'),
+      v.literal('transfer'),
+      v.literal('refund'),
+    ),
+    classificationState: v.union(v.literal('confirmed'), v.literal('review_required')),
+    merchantKey: v.string(),
     sourceDescription: v.string(),
     sourceFingerprint: v.string(),
     subject: v.string(),
-  }).index('by_subject_and_source_fingerprint', ['subject', 'sourceFingerprint']),
+  })
+    .index('by_subject_and_source_fingerprint', ['subject', 'sourceFingerprint'])
+    .index('by_subject_and_merchant_key', ['subject', 'merchantKey']),
+  merchantRules: defineTable({
+    classification: v.union(
+      v.literal('discretionary'),
+      v.literal('essential'),
+      v.literal('transfer'),
+      v.literal('refund'),
+    ),
+    merchantKey: v.string(),
+    subject: v.string(),
+  }).index('by_subject_and_merchant_key', ['subject', 'merchantKey']),
   savedCsvMappings: defineTable({
     amountColumn: v.string(),
     dateColumn: v.string(),
