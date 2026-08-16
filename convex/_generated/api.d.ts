@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as imports from "../imports.js";
 import type * as workspaces from "../workspaces.js";
 
 import type {
@@ -17,6 +18,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  imports: typeof imports;
   workspaces: typeof workspaces;
 }>;
 

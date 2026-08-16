@@ -27,6 +27,44 @@ export interface WorkspaceCommandResponse {
   projection: WorkspaceProjection;
 }
 
+export type AccountCoverageState = 'imported' | 'manual' | 'excluded' | 'missing';
+
+export interface CsvColumnMapping {
+  amountColumn: string;
+  dateColumn: string;
+  descriptionColumn: string;
+}
+
+export interface CsvImportRequest {
+  accountExternalId: string;
+  accountName: string;
+  csv: string;
+  idempotencyKey: string;
+  mapping?: CsvColumnMapping;
+}
+
+export interface CsvImportResult {
+  accountId: string;
+  importedTransactionCount: number;
+  outcome: 'applied' | 'replayed';
+  skippedDuplicateTransactionCount: number;
+  sourceAsOf: string;
+}
+
+export interface AccountCoverage {
+  accountExternalId: string;
+  accountName: string;
+  lastImportedAt?: number;
+  sourceAsOf?: string;
+  state: AccountCoverageState;
+}
+
+export interface AllowanceCoverage {
+  accounts: readonly AccountCoverage[];
+  allowanceQualified: boolean;
+  missingAccountExternalIds: readonly string[];
+}
+
 export interface ApiProblem {
   error: {
     code: string;

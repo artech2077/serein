@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { AccessTokenVerifier } from '../src/auth.js';
 import { buildApp } from '../src/app.js';
+import type { FinanceImportStore } from '../src/finance-import-store.js';
 import { InMemoryWorkspaceStore } from '../src/workspace-store.js';
 
 const readToken = 'read-token';
@@ -9,7 +10,7 @@ const writeToken = 'write-token';
 const fullToken = 'full-token';
 const secondUserToken = 'second-user-token';
 
-function buildTestApp() {
+function buildTestApp(financeImportStore?: FinanceImportStore) {
   const accessTokenVerifier: AccessTokenVerifier = {
     verify: vi.fn(async (token) => {
       const identities = {
@@ -40,7 +41,11 @@ function buildTestApp() {
     }),
   };
 
-  return buildApp({ accessTokenVerifier, workspaceStore: new InMemoryWorkspaceStore() });
+  return buildApp({
+    accessTokenVerifier,
+    financeImportStore,
+    workspaceStore: new InMemoryWorkspaceStore(),
+  });
 }
 
 function bearer(token: string) {
@@ -179,6 +184,79 @@ describe('workspace authorization boundary', () => {
     });
     expect(reusedKey.statusCode).toBe(409);
     expect(reusedKey.json()).toMatchObject({ error: { code: 'idempotency_key_conflict' } });
+  });
+
+  it('routes authenticated CSV imports and coverage through the backend import store', async () => {
+    const financeImportStore: FinanceImportStore = {
+      getAllowanceCoverage: vi.fn(async () => ({
+        accounts: [],
+        allowanceQualified: true,
+        missingAccountExternalIds: [],
+      })),
+      importCsv: vi.fn(async () => ({
+        accountId: 'account_123',
+        importedTransactionCount: 1,
+        outcome: 'applied',
+        skippedDuplicateTransactionCount: 0,
+        sourceAsOf: '2026-08-16',
+      })),
+      setAccountCoverageState: vi.fn(async (_subject, request) => ({
+        accountExternalId: request.accountExternalId,
+        state: request.state,
+      })),
+      upsertManualAccount: vi.fn(async (_subject, request) => ({
+        accountExternalId: request.accountExternalId,
+        state: 'manual',
+      })),
+    };
+    const app = buildTestApp(financeImportStore);
+    apps.push(app);
+
+    const imported = await app.inject({
+      headers: bearer(fullToken),
+      method: 'POST',
+      payload: {
+        accountExternalId: 'checking',
+        accountName: 'Checking',
+        csv: 'Date,Description,Amount\\n2026-08-16,Coffee,-3.50',
+        idempotencyKey: 'import-1',
+        mapping: { amountColumn: 'Amount', dateColumn: 'Date', descriptionColumn: 'Description' },
+      },
+      url: '/v1/imports/csv',
+    });
+    const coverage = await app.inject({
+      headers: bearer(readToken),
+      method: 'GET',
+      url: '/v1/imports/coverage',
+    });
+    const manual = await app.inject({
+      headers: bearer(fullToken),
+      method: 'POST',
+      payload: { accountExternalId: 'cash', accountName: 'Cash' },
+      url: '/v1/accounts/manual',
+    });
+    const missing = await app.inject({
+      headers: bearer(fullToken),
+      method: 'POST',
+      payload: { accountExternalId: 'savings', accountName: 'Savings', state: 'missing' },
+      url: '/v1/accounts/coverage',
+    });
+
+    expect(imported.statusCode).toBe(201);
+    expect(imported.json()).toMatchObject({ importedTransactionCount: 1, outcome: 'applied' });
+    expect(coverage.statusCode).toBe(200);
+    expect(coverage.json()).toEqual({
+      accounts: [],
+      allowanceQualified: true,
+      missingAccountExternalIds: [],
+    });
+    expect(manual.statusCode).toBe(201);
+    expect(missing.statusCode).toBe(200);
+    expect(financeImportStore.importCsv).toHaveBeenCalledWith(
+      'auth0|primary-user',
+      expect.objectContaining({ accountExternalId: 'checking', idempotencyKey: 'import-1' }),
+      fullToken,
+    );
   });
 });
 
