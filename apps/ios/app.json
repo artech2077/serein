@@ -1,0 +1,14 @@
+{
+  "expo": {
+    "name": "Serein",
+    "slug": "serein",
+    "scheme": "serein",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "bundleIdentifier": "com.artech2077.serein",
+      "supportsTablet": false
+    }
+  }
+}

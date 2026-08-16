@@ -1,0 +1,13 @@
+node_modules
+.turbo
+dist
+.next
+.expo
+coverage
+*.log
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+apps/ios/ios
+apps/ios/android

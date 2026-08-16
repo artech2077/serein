@@ -1,0 +1,42 @@
+:root {
+  color: #15231d;
+  background: #f5f3ec;
+  font-family: Georgia, 'Times New Roman', serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+main {
+  display: grid;
+  min-height: 100vh;
+  max-width: 44rem;
+  align-content: center;
+  gap: 1.25rem;
+  margin: auto;
+  padding: 2rem;
+}
+
+h1,
+p {
+  margin: 0;
+}
+
+h1 {
+  font-size: clamp(2.4rem, 6vw, 4.5rem);
+  font-weight: 500;
+  line-height: 0.98;
+}
+
+main > p:last-child {
+  max-width: 36rem;
+  color: #41564a;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 1.05rem;
+  line-height: 1.5;
+}
