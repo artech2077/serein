@@ -134,6 +134,34 @@ export interface DeferredCardSummary {
   reviewRequiredSettlementCount: number;
 }
 
+export interface DatedCashFlowEvent {
+  amountCents: number;
+  date: string;
+  kind: 'income' | 'obligation';
+}
+
+export interface GoalReservationCommand {
+  cashFlow: {
+    events: readonly DatedCashFlowEvent[];
+    openingCashCents: number;
+    safetyBufferCents: number;
+  };
+  goalExternalId: string;
+  idempotencyKey: string;
+  label: string;
+  priority: number;
+  reservationAmountCents: number;
+  reservationDate: string;
+  targetCents: number;
+  targetDate: string;
+}
+
+export interface CashFlowSafetyResult {
+  firstUnsafeDate?: string;
+  lowestBalanceCents: number;
+  safe: boolean;
+}
+
 export interface ApiProblem {
   error: {
     code: string;
