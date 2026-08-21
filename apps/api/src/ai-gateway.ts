@@ -28,6 +28,10 @@ export interface ClassificationSuggestion {
 export interface MonthlyPlanningSuggestion {
   evidenceIndexes: readonly number[];
   kind: 'observation' | 'recommendation' | 'risk';
+  proposedChange?: {
+    action: 'review';
+    target: 'goal' | 'monthly_plan';
+  };
   summary: string;
 }
 
@@ -150,6 +154,15 @@ const monthlyPlanningSchema = {
         properties: {
           evidenceIndexes: { items: { minimum: 0, type: 'integer' }, type: 'array' },
           kind: { enum: ['observation', 'recommendation', 'risk'], type: 'string' },
+          proposedChange: {
+            additionalProperties: false,
+            properties: {
+              action: { enum: ['review'], type: 'string' },
+              target: { enum: ['goal', 'monthly_plan'], type: 'string' },
+            },
+            required: ['action', 'target'],
+            type: 'object',
+          },
           summary: { type: 'string' },
         },
         required: ['kind', 'summary', 'evidenceIndexes'],
@@ -443,11 +456,19 @@ function parseMonthlySuggestion(value: unknown, evidenceCount: number): MonthlyP
     !isMonthlyKind(value.kind) ||
     typeof value.summary !== 'string' ||
     value.summary.trim().length === 0 ||
+    value.summary.length > 280 ||
     !Array.isArray(value.evidenceIndexes) ||
-    !value.evidenceIndexes.every((index) => validEvidenceIndex(index, evidenceCount))
+    value.evidenceIndexes.length === 0 ||
+    !value.evidenceIndexes.every((index) => validEvidenceIndex(index, evidenceCount)) ||
+    (value.proposedChange !== undefined && !isPlanningChange(value.proposedChange))
   )
     throw new AiStructuredOutputError();
-  return { evidenceIndexes: value.evidenceIndexes, kind: value.kind, summary: value.summary };
+  return {
+    evidenceIndexes: value.evidenceIndexes,
+    kind: value.kind,
+    proposedChange: value.proposedChange as MonthlyPlanningSuggestion['proposedChange'],
+    summary: value.summary,
+  };
 }
 
 function validateCommand(value: AiGatewayCommand) {
@@ -536,6 +557,15 @@ function isClassification(value: unknown): value is ClassificationSuggestion['cl
 }
 function isMonthlyKind(value: unknown): value is MonthlyPlanningSuggestion['kind'] {
   return value === 'observation' || value === 'recommendation' || value === 'risk';
+}
+function isPlanningChange(
+  value: unknown,
+): value is NonNullable<MonthlyPlanningSuggestion['proposedChange']> {
+  return (
+    isRecord(value) &&
+    value.action === 'review' &&
+    (value.target === 'goal' || value.target === 'monthly_plan')
+  );
 }
 function isEvidenceKind(value: unknown): value is AiEvidenceKind {
   return (

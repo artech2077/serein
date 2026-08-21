@@ -109,7 +109,12 @@ describe('AI gateway', () => {
     const responses = client(
       JSON.stringify({
         suggestions: [
-          { evidenceIndexes: [0], kind: 'risk', summary: 'Known bill precedes income.' },
+          {
+            evidenceIndexes: [0],
+            kind: 'risk',
+            proposedChange: { action: 'review', target: 'monthly_plan' },
+            summary: 'Known bill precedes income.',
+          },
         ],
       }),
     );
@@ -123,7 +128,12 @@ describe('AI gateway', () => {
       command({ requestId: 'plan-1', task: 'monthly_planning' }),
     );
 
-    expect(result).toMatchObject({ model: 'gpt-5.6-terra' });
+    expect(result).toMatchObject({
+      model: 'gpt-5.6-terra',
+      output: {
+        suggestions: [{ proposedChange: { action: 'review', target: 'monthly_plan' } }],
+      },
+    });
     expect(vi.mocked(responses.create).mock.calls[0][0]).toMatchObject({
       model: 'gpt-5.6-terra',
       reasoning: { effort: 'medium' },
