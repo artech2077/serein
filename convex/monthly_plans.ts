@@ -1,6 +1,7 @@
 import type { MutationCtx, QueryCtx } from './_generated/server';
 import { mutation, query } from './_generated/server';
 import { ConvexError, v } from 'convex/values';
+import { recordFinancialAudit } from './audit';
 
 const planState = v.union(
   v.literal('awaiting_approval'),
@@ -68,6 +69,14 @@ export const propose = mutation({
       version: 1,
     };
     await saveReceipt(ctx, subject, request.idempotencyKey, request, result);
+    await recordFinancialAudit(ctx, {
+      amountCents: request.proposedBaseDailyAllowanceCents,
+      entityId: planId,
+      eventType: 'monthly_plan_proposed',
+      month: request.month,
+      subject,
+      summary: `Proposed the ${request.month} monthly plan with a daily allowance of ${request.proposedBaseDailyAllowanceCents} cents.`,
+    });
     return result;
   },
 });
@@ -101,6 +110,14 @@ export const approve = mutation({
       version,
     };
     await saveReceipt(ctx, subject, request.idempotencyKey, request, result);
+    await recordFinancialAudit(ctx, {
+      amountCents: plan.proposedBaseDailyAllowanceCents,
+      entityId: plan._id,
+      eventType: 'monthly_plan_approved',
+      month: plan.month,
+      subject,
+      summary: `Approved the ${plan.month} monthly plan and its ${plan.proposedBaseDailyAllowanceCents}-cent daily allowance.`,
+    });
     return result;
   },
 });
@@ -159,6 +176,14 @@ export const proposeMaterialRevision = mutation({
       version,
     };
     await saveReceipt(ctx, subject, request.idempotencyKey, request, result);
+    await recordFinancialAudit(ctx, {
+      amountCents: request.proposedBaseDailyAllowanceCents,
+      entityId: plan._id,
+      eventType: 'monthly_plan_revision_proposed',
+      month: plan.month,
+      subject,
+      summary: `Proposed a material revision to the ${plan.month} daily allowance.`,
+    });
     return result;
   },
 });

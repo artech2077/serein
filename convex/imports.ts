@@ -1,6 +1,7 @@
 import type { MutationCtx, QueryCtx } from './_generated/server';
 import { mutation, query } from './_generated/server';
 import { ConvexError, v } from 'convex/values';
+import { recordFinancialAudit, resolveMaterialAlert, upsertMaterialAlert } from './audit';
 import { reconcileImportedTransaction } from './quick_adds';
 
 const coverageState = v.union(
@@ -66,6 +67,7 @@ export const importCsv = mutation({
     }
 
     const account = await upsertImportedAccount(ctx, subject, request, sourceAsOf);
+    await resolveMaterialAlert(ctx, subject, `account-coverage:${request.accountExternalId}`);
     let importedTransactionCount = 0;
     let skippedDuplicateTransactionCount = 0;
 
@@ -137,6 +139,12 @@ export const importCsv = mutation({
       result,
       subject,
     });
+    await recordFinancialAudit(ctx, {
+      entityId: request.accountExternalId,
+      eventType: 'csv_imported',
+      subject,
+      summary: `Imported ${importedTransactionCount} transactions for ${request.accountName}; skipped ${skippedDuplicateTransactionCount} duplicates.`,
+    });
 
     return result;
   },
@@ -160,6 +168,13 @@ export const upsertManualAccount = mutation({
         workspaceId: await workspaceIdForSubject(subject),
       });
     }
+    await resolveMaterialAlert(ctx, subject, `account-coverage:${request.accountExternalId}`);
+    await recordFinancialAudit(ctx, {
+      entityId: request.accountExternalId,
+      eventType: 'account_coverage_changed',
+      subject,
+      summary: `${request.accountName} is now included as a manually tracked account.`,
+    });
 
     return { accountExternalId: request.accountExternalId, state: 'manual' } as const;
   },
@@ -182,6 +197,24 @@ export const setAccountCoverageState = mutation({
         workspaceId: await workspaceIdForSubject(subject),
       });
     }
+    if (request.state === 'missing') {
+      await upsertMaterialAlert(ctx, {
+        dedupeKey: `account-coverage:${request.accountExternalId}`,
+        evidenceId: request.accountExternalId,
+        kind: 'missing_account_coverage',
+        recoveryAction: 'Import this account, add it manually, or explicitly exclude it.',
+        subject,
+        summary: `${request.accountName} is missing from the finance workspace, so allowance calculations may be incomplete.`,
+      });
+    } else {
+      await resolveMaterialAlert(ctx, subject, `account-coverage:${request.accountExternalId}`);
+    }
+    await recordFinancialAudit(ctx, {
+      entityId: request.accountExternalId,
+      eventType: 'account_coverage_changed',
+      subject,
+      summary: `${request.accountName} account coverage is now ${request.state}.`,
+    });
 
     return { accountExternalId: request.accountExternalId, state: request.state };
   },

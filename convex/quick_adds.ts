@@ -2,6 +2,7 @@ import type { MutationCtx, QueryCtx } from './_generated/server';
 import type { Id } from './_generated/dataModel';
 import { mutation, query } from './_generated/server';
 import { ConvexError, v } from 'convex/values';
+import { recordFinancialAudit, upsertMaterialAlert } from './audit';
 
 const quickAdd = v.object({
   amountCents: v.number(),
@@ -70,6 +71,13 @@ export const create = mutation({
       requestFingerprint: fingerprint,
       subject,
     });
+    await recordFinancialAudit(ctx, {
+      amountCents: request.amountCents,
+      entityId: id,
+      eventType: 'quick_add_created',
+      subject,
+      summary: `Added a provisional transaction of ${request.amountCents} cents.`,
+    });
     return { outcome: 'applied' as const, quickAddId: id };
   },
 });
@@ -119,9 +127,27 @@ export async function reconcileImportedTransaction(
         .eq('matchKey', matchKeyFor(accountId, bookingDate, amountCents, sourceDescription)),
     )
     .collect();
-  if (matches.length === 1) await ctx.db.patch(matches[0]._id, { state: 'matched' });
-  if (matches.length > 1)
+  if (matches.length === 1) {
+    await ctx.db.patch(matches[0]._id, { state: 'matched' });
+    await recordFinancialAudit(ctx, {
+      amountCents,
+      entityId: matches[0]._id,
+      eventType: 'quick_add_reconciled',
+      subject,
+      summary: 'Reconciled a provisional transaction with an imported transaction.',
+    });
+  }
+  if (matches.length > 1) {
     await Promise.all(matches.map((item) => ctx.db.patch(item._id, { state: 'review_required' })));
+    await upsertMaterialAlert(ctx, {
+      dedupeKey: `ambiguous-quick-add:${matchKeyFor(accountId, bookingDate, amountCents, sourceDescription)}`,
+      kind: 'ambiguous_quick_add_match',
+      recoveryAction: 'Review the duplicate provisional transactions and keep the matching one.',
+      subject,
+      summary:
+        'Multiple provisional transactions match this imported transaction, so reconciliation needs review.',
+    });
+  }
 }
 
 function validate(value: { amountCents: number; bookingDate: string; sourceDescription: string }) {

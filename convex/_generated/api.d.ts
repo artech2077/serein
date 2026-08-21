@@ -9,6 +9,7 @@
  */
 
 import type * as ai_usage from "../ai_usage.js";
+import type * as audit from "../audit.js";
 import type * as classifications from "../classifications.js";
 import type * as deferred_cards from "../deferred_cards.js";
 import type * as goals from "../goals.js";
@@ -25,6 +26,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   ai_usage: typeof ai_usage;
+  audit: typeof audit;
   classifications: typeof classifications;
   deferred_cards: typeof deferred_cards;
   goals: typeof goals;

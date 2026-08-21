@@ -79,6 +79,7 @@ describe('deferred-card purchases and settlements', () => {
       sourceDescription: 'Delayed card settlement',
     });
     const summary = await t.query(api.deferred_cards.getSummary, {});
+    const alerts = await t.query(api.audit.getOpenAlerts, {});
 
     expect(partial).toMatchObject({
       outstandingLiabilityCents: 600,
@@ -89,6 +90,13 @@ describe('deferred-card purchases and settlements', () => {
       outstandingLiabilityCents: 600,
       reviewRequiredSettlementCount: 1,
     });
+    expect(alerts).toEqual([
+      expect.objectContaining({
+        impactCents: 100,
+        kind: 'unallocated_settlement',
+        recoveryAction: 'Review the settlement allocations and assign the remaining amount.',
+      }),
+    ]);
   });
 
   it('replays matching requests and keeps card records private to the authenticated subject', async () => {

@@ -1,6 +1,7 @@
 import type { MutationCtx, QueryCtx } from './_generated/server';
 import { mutation, query } from './_generated/server';
 import { ConvexError, v } from 'convex/values';
+import { recordFinancialAudit } from './audit';
 
 const cashFlowEvent = v.object({
   amountCents: v.number(),
@@ -95,6 +96,13 @@ export const approveGoalReservation = mutation({
       requestFingerprint: fingerprint,
       result: applied,
       subject,
+    });
+    await recordFinancialAudit(ctx, {
+      amountCents: request.reservationAmountCents,
+      entityId: reservationId,
+      eventType: 'reservation_approved',
+      subject,
+      summary: `Approved a ${request.reservationAmountCents}-cent reservation for ${request.label}.`,
     });
     return applied;
   },

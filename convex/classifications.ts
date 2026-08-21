@@ -2,6 +2,7 @@ import type { MutationCtx, QueryCtx } from './_generated/server';
 import type { Id } from './_generated/dataModel';
 import { mutation, query } from './_generated/server';
 import { ConvexError, v } from 'convex/values';
+import { recordFinancialAudit } from './audit';
 
 const confirmedClassification = v.union(
   v.literal('discretionary'),
@@ -136,6 +137,13 @@ export const acceptNonAllowanceAiSuggestion = mutation({
       classification: 'transfer',
       classificationState: 'confirmed',
     });
+    await recordFinancialAudit(ctx, {
+      amountCents: transaction.amountCents,
+      entityId: transaction._id,
+      eventType: 'classification_confirmed',
+      subject,
+      summary: 'Accepted the high-confidence transfer suggestion for this transaction.',
+    });
     return null;
   },
 });
@@ -149,6 +157,13 @@ export const confirmClassification = mutation({
     await ctx.db.patch(transaction._id, {
       classification: request.classification,
       classificationState: 'confirmed',
+    });
+    await recordFinancialAudit(ctx, {
+      amountCents: transaction.amountCents,
+      entityId: transaction._id,
+      eventType: 'classification_confirmed',
+      subject,
+      summary: `Confirmed this transaction as ${request.classification}.`,
     });
     return { classification: request.classification, transactionId: transaction._id };
   },
@@ -198,6 +213,13 @@ export const correctMerchant = mutation({
         });
       }
     }
+
+    await recordFinancialAudit(ctx, {
+      entityId: transaction._id,
+      eventType: 'merchant_corrected',
+      subject,
+      summary: `Corrected ${matching.length} ${matching.length === 1 ? 'transaction' : 'transactions'} for this merchant as ${request.classification} (${request.scope}).`,
+    });
 
     return { affectedTransactionCount: matching.length, scope: request.scope };
   },

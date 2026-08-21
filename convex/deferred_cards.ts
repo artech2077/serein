@@ -2,6 +2,7 @@ import type { MutationCtx, QueryCtx } from './_generated/server';
 import type { Id } from './_generated/dataModel';
 import { mutation, query } from './_generated/server';
 import { ConvexError, v } from 'convex/values';
+import { recordFinancialAudit, upsertMaterialAlert } from './audit';
 
 const purchaseRequest = v.object({
   amountCents: v.number(),
@@ -84,6 +85,13 @@ export const recordPurchase = mutation({
       purchaseId,
       requestFingerprint: fingerprint,
       subject,
+    });
+    await recordFinancialAudit(ctx, {
+      amountCents: request.amountCents,
+      entityId: purchaseId,
+      eventType: 'deferred_purchase_recorded',
+      subject,
+      summary: `Recorded a deferred-card purchase of ${request.amountCents} cents.`,
     });
     return { outcome: 'applied' as const, purchaseId };
   },
@@ -182,6 +190,27 @@ export const recordSettlement = mutation({
       result,
       subject,
     });
+    await recordFinancialAudit(ctx, {
+      amountCents: request.amountCents,
+      entityId: settlementId,
+      eventType: 'settlement_recorded',
+      subject,
+      summary:
+        state === 'reconciled'
+          ? `Reconciled a deferred-card settlement of ${request.amountCents} cents.`
+          : `Recorded a deferred-card settlement with ${unallocatedCents} cents still needing review.`,
+    });
+    if (state === 'review_required') {
+      await upsertMaterialAlert(ctx, {
+        dedupeKey: `unallocated-settlement:${request.settlementExternalId}`,
+        evidenceId: settlementId,
+        impactCents: unallocatedCents,
+        kind: 'unallocated_settlement',
+        recoveryAction: 'Review the settlement allocations and assign the remaining amount.',
+        subject,
+        summary: `${unallocatedCents} cents of this deferred-card settlement are not allocated to purchases.`,
+      });
+    }
     return result;
   },
 });
