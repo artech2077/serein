@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as ai_usage from "../ai_usage.js";
 import type * as classifications from "../classifications.js";
 import type * as deferred_cards from "../deferred_cards.js";
 import type * as goals from "../goals.js";
@@ -23,6 +24,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  ai_usage: typeof ai_usage;
   classifications: typeof classifications;
   deferred_cards: typeof deferred_cards;
   goals: typeof goals;

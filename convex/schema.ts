@@ -187,6 +187,17 @@ export default defineSchema({
     }),
     subject: v.string(),
   }).index('by_subject_and_idempotency_key', ['subject', 'idempotencyKey']),
+  aiUsageReservations: defineTable({
+    estimatedCostNanoEur: v.number(),
+    month: v.string(),
+    requestFingerprint: v.string(),
+    requestId: v.string(),
+    state: v.union(v.literal('reserved'), v.literal('committed')),
+    subject: v.string(),
+    task: v.union(v.literal('routine_classification'), v.literal('monthly_planning')),
+  })
+    .index('by_subject_and_request_id', ['subject', 'requestId'])
+    .index('by_subject_and_month_and_state', ['subject', 'month', 'state']),
   savedCsvMappings: defineTable({
     amountColumn: v.string(),
     dateColumn: v.string(),
