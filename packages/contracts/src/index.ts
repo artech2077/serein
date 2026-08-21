@@ -100,6 +100,40 @@ export interface PendingQuickAdd {
   state: 'provisional' | 'review_required';
 }
 
+export interface DeferredCardPurchaseRequest {
+  amountCents: number;
+  cardExternalId: string;
+  expectedSettlementEnd: string;
+  expectedSettlementStart: string;
+  idempotencyKey: string;
+  purchaseDate: string;
+  purchaseExternalId: string;
+  settlementAccountExternalId: string;
+  sourceDescription: string;
+}
+
+export interface DeferredCardSettlementAllocation {
+  amountCents: number;
+  purchaseExternalId: string;
+}
+
+export interface DeferredCardSettlementRequest {
+  allocations: readonly DeferredCardSettlementAllocation[];
+  amountCents: number;
+  cardExternalId: string;
+  idempotencyKey: string;
+  settlementAccountExternalId: string;
+  settlementDate: string;
+  settlementExternalId: string;
+  sourceDescription: string;
+}
+
+export interface DeferredCardSummary {
+  cumulativePurchaseCents: number;
+  outstandingLiabilityCents: number;
+  reviewRequiredSettlementCount: number;
+}
+
 export interface ApiProblem {
   error: {
     code: string;

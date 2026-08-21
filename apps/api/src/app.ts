@@ -5,6 +5,8 @@ import type {
   ApiProblem,
   ConfirmedTransactionClassification,
   CsvImportRequest,
+  DeferredCardPurchaseRequest,
+  DeferredCardSettlementRequest,
   HealthResponse,
   QuickAddRequest,
   WorkspaceCommandRequest,
@@ -17,6 +19,7 @@ import {
   type AuthenticatedIdentity,
 } from './auth.js';
 import { ConvexWorkspaceStore, getConvexUrl } from './convex-workspace-store.js';
+import { ConvexDeferredCardStore, type DeferredCardStore } from './deferred-card-store.js';
 import {
   ConvexFinanceClassificationStore,
   type FinanceClassificationStore,
@@ -34,6 +37,7 @@ const API_VERSION = 'v1' as const;
 
 export interface BuildAppOptions {
   accessTokenVerifier?: AccessTokenVerifier;
+  deferredCardStore?: DeferredCardStore;
   financeClassificationStore?: FinanceClassificationStore;
   financeImportStore?: FinanceImportStore;
   quickAddStore?: QuickAddStore;
@@ -45,6 +49,8 @@ export function buildApp(options: BuildAppOptions = {}) {
   const convexUrl = getConvexUrl();
   const workspaceStore =
     options.workspaceStore ?? (convexUrl ? new ConvexWorkspaceStore(convexUrl) : undefined);
+  const deferredCardStore =
+    options.deferredCardStore ?? (convexUrl ? new ConvexDeferredCardStore(convexUrl) : undefined);
   const financeImportStore =
     options.financeImportStore ?? (convexUrl ? new ConvexFinanceImportStore(convexUrl) : undefined);
   const financeClassificationStore =
@@ -390,6 +396,85 @@ export function buildApp(options: BuildAppOptions = {}) {
     );
   });
 
+  app.get('/v1/deferred-cards/summary', async (request, reply) => {
+    const authenticatedRequest = await authenticate(request.headers.authorization, reply);
+    if (
+      !authenticatedRequest ||
+      !requireScope(authenticatedRequest.identity, 'read:workspace', reply)
+    )
+      return;
+    if (!deferredCardStore)
+      return reply
+        .code(503)
+        .send(problem('workspace_not_configured', 'Configure the Convex workspace store.'));
+    return deferredCardStore.getSummary(
+      authenticatedRequest.identity.subject,
+      authenticatedRequest.accessToken,
+    );
+  });
+
+  app.post('/v1/deferred-card-purchases', async (request, reply) => {
+    const authenticatedRequest = await authenticate(request.headers.authorization, reply);
+    if (
+      !authenticatedRequest ||
+      !requireScope(authenticatedRequest.identity, 'write:workspace', reply)
+    )
+      return;
+    const purchase = parseDeferredCardPurchase(request.body);
+    if (!purchase)
+      return reply
+        .code(400)
+        .send(problem('invalid_deferred_card_purchase', 'Provide a valid deferred-card purchase.'));
+    if (!deferredCardStore)
+      return reply
+        .code(503)
+        .send(problem('workspace_not_configured', 'Configure the Convex workspace store.'));
+    try {
+      const result = await deferredCardStore.recordPurchase(
+        authenticatedRequest.identity.subject,
+        purchase,
+        authenticatedRequest.accessToken,
+      );
+      return reply.code(result.outcome === 'applied' ? 201 : 200).send(result);
+    } catch (error) {
+      if (error instanceof IdempotencyKeyConflictError)
+        return reply.code(409).send(problem('idempotency_key_conflict', error.message));
+      throw error;
+    }
+  });
+
+  app.post('/v1/deferred-card-settlements', async (request, reply) => {
+    const authenticatedRequest = await authenticate(request.headers.authorization, reply);
+    if (
+      !authenticatedRequest ||
+      !requireScope(authenticatedRequest.identity, 'write:workspace', reply)
+    )
+      return;
+    const settlement = parseDeferredCardSettlement(request.body);
+    if (!settlement)
+      return reply
+        .code(400)
+        .send(
+          problem('invalid_deferred_card_settlement', 'Provide a valid deferred-card settlement.'),
+        );
+    if (!deferredCardStore)
+      return reply
+        .code(503)
+        .send(problem('workspace_not_configured', 'Configure the Convex workspace store.'));
+    try {
+      const result = await deferredCardStore.recordSettlement(
+        authenticatedRequest.identity.subject,
+        settlement,
+        authenticatedRequest.accessToken,
+      );
+      return reply.code(result.outcome === 'applied' ? 201 : 200).send(result);
+    } catch (error) {
+      if (error instanceof IdempotencyKeyConflictError)
+        return reply.code(409).send(problem('idempotency_key_conflict', error.message));
+      throw error;
+    }
+  });
+
   async function authenticate(
     authorization: string | undefined,
     reply: { code(statusCode: number): { send(payload: ApiProblem): unknown } },
@@ -577,6 +662,70 @@ function parseRouteId(params: unknown): string | undefined {
     return undefined;
   }
   return params.transactionId;
+}
+
+function parseDeferredCardPurchase(body: unknown): DeferredCardPurchaseRequest | undefined {
+  if (!isRecord(body) || Object.keys(body).length !== 9) return undefined;
+  const value = body as Record<string, unknown>;
+  if (
+    !validPositiveCents(value.amountCents) ||
+    !validText(value.cardExternalId) ||
+    !validDate(value.expectedSettlementEnd) ||
+    !validDate(value.expectedSettlementStart) ||
+    !validIdempotencyKey(value.idempotencyKey) ||
+    !validDate(value.purchaseDate) ||
+    !validText(value.purchaseExternalId) ||
+    !validText(value.settlementAccountExternalId) ||
+    !validText(value.sourceDescription) ||
+    value.expectedSettlementStart > value.expectedSettlementEnd
+  )
+    return undefined;
+  return value as unknown as DeferredCardPurchaseRequest;
+}
+
+function parseDeferredCardSettlement(body: unknown): DeferredCardSettlementRequest | undefined {
+  if (!isRecord(body) || Object.keys(body).length !== 8) return undefined;
+  const value = body as Record<string, unknown>;
+  if (
+    !validPositiveCents(value.amountCents) ||
+    !validText(value.cardExternalId) ||
+    !validIdempotencyKey(value.idempotencyKey) ||
+    !validText(value.settlementAccountExternalId) ||
+    !validDate(value.settlementDate) ||
+    !validText(value.settlementExternalId) ||
+    !validText(value.sourceDescription) ||
+    !Array.isArray(value.allocations) ||
+    value.allocations.some(
+      (allocation) =>
+        !isRecord(allocation) ||
+        Object.keys(allocation).length !== 2 ||
+        !validPositiveCents(allocation.amountCents) ||
+        !validText(allocation.purchaseExternalId),
+    ) ||
+    new Set(
+      value.allocations.map(
+        (allocation) => (allocation as Record<string, unknown>).purchaseExternalId,
+      ),
+    ).size !== value.allocations.length
+  )
+    return undefined;
+  return value as unknown as DeferredCardSettlementRequest;
+}
+
+function validPositiveCents(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
+}
+
+function validDate(value: unknown): value is string {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function validText(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function validIdempotencyKey(value: unknown): value is string {
+  return typeof value === 'string' && /^[A-Za-z0-9._:-]{1,128}$/.test(value);
 }
 
 function parseQuickAdd(body: unknown, includeCreationFields: true): QuickAddRequest | undefined;
