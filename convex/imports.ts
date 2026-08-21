@@ -1,6 +1,7 @@
 import type { MutationCtx, QueryCtx } from './_generated/server';
 import { mutation, query } from './_generated/server';
 import { ConvexError, v } from 'convex/values';
+import { reconcileImportedTransaction } from './quick_adds';
 
 const coverageState = v.union(
   v.literal('imported'),
@@ -111,6 +112,14 @@ export const importCsv = mutation({
         sourceFingerprint,
         subject,
       });
+      await reconcileImportedTransaction(
+        ctx,
+        subject,
+        account._id,
+        row.bookingDate,
+        Math.abs(row.amountCents),
+        row.sourceDescription,
+      );
       importedTransactionCount += 1;
     }
 

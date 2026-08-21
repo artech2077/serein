@@ -6,6 +6,7 @@ import type {
   ConfirmedTransactionClassification,
   CsvImportRequest,
   HealthResponse,
+  QuickAddRequest,
   WorkspaceCommandRequest,
 } from '@serein/contracts';
 
@@ -21,6 +22,7 @@ import {
   type FinanceClassificationStore,
 } from './finance-classification-store.js';
 import { ConvexFinanceImportStore, type FinanceImportStore } from './finance-import-store.js';
+import { ConvexQuickAddStore, type QuickAddStore } from './quick-add-store.js';
 import {
   IdempotencyKeyConflictError,
   WorkspaceAlreadyInitializedError,
@@ -34,6 +36,7 @@ export interface BuildAppOptions {
   accessTokenVerifier?: AccessTokenVerifier;
   financeClassificationStore?: FinanceClassificationStore;
   financeImportStore?: FinanceImportStore;
+  quickAddStore?: QuickAddStore;
   workspaceStore?: WorkspaceStore;
 }
 
@@ -47,6 +50,8 @@ export function buildApp(options: BuildAppOptions = {}) {
   const financeClassificationStore =
     options.financeClassificationStore ??
     (convexUrl ? new ConvexFinanceClassificationStore(convexUrl) : undefined);
+  const quickAddStore =
+    options.quickAddStore ?? (convexUrl ? new ConvexQuickAddStore(convexUrl) : undefined);
   const accessTokenVerifier =
     options.accessTokenVerifier ??
     (() => {
@@ -317,6 +322,74 @@ export function buildApp(options: BuildAppOptions = {}) {
     );
   });
 
+  app.post('/v1/quick-adds/preview', async (request, reply) => {
+    const authenticatedRequest = await authenticate(request.headers.authorization, reply);
+    if (
+      !authenticatedRequest ||
+      !requireScope(authenticatedRequest.identity, 'read:workspace', reply)
+    )
+      return;
+    const quickAdd = parseQuickAdd(request.body, false);
+    if (!quickAdd)
+      return reply
+        .code(400)
+        .send(problem('invalid_quick_add', 'Provide a valid Quick Add preview.'));
+    if (!quickAddStore)
+      return reply
+        .code(503)
+        .send(problem('workspace_not_configured', 'Configure the Convex workspace store.'));
+    return quickAddStore.preview(
+      authenticatedRequest.identity.subject,
+      quickAdd,
+      authenticatedRequest.accessToken,
+    );
+  });
+
+  app.post('/v1/quick-adds', async (request, reply) => {
+    const authenticatedRequest = await authenticate(request.headers.authorization, reply);
+    if (
+      !authenticatedRequest ||
+      !requireScope(authenticatedRequest.identity, 'write:workspace', reply)
+    )
+      return;
+    const quickAdd = parseQuickAdd(request.body, true);
+    if (!quickAdd)
+      return reply.code(400).send(problem('invalid_quick_add', 'Provide a valid Quick Add.'));
+    if (!quickAddStore)
+      return reply
+        .code(503)
+        .send(problem('workspace_not_configured', 'Configure the Convex workspace store.'));
+    try {
+      const result = await quickAddStore.create(
+        authenticatedRequest.identity.subject,
+        quickAdd,
+        authenticatedRequest.accessToken,
+      );
+      return reply.code(result.outcome === 'applied' ? 201 : 200).send(result);
+    } catch (error) {
+      if (error instanceof IdempotencyKeyConflictError)
+        return reply.code(409).send(problem('idempotency_key_conflict', error.message));
+      throw error;
+    }
+  });
+
+  app.get('/v1/quick-adds', async (request, reply) => {
+    const authenticatedRequest = await authenticate(request.headers.authorization, reply);
+    if (
+      !authenticatedRequest ||
+      !requireScope(authenticatedRequest.identity, 'read:workspace', reply)
+    )
+      return;
+    if (!quickAddStore)
+      return reply
+        .code(503)
+        .send(problem('workspace_not_configured', 'Configure the Convex workspace store.'));
+    return quickAddStore.getPending(
+      authenticatedRequest.identity.subject,
+      authenticatedRequest.accessToken,
+    );
+  });
+
   async function authenticate(
     authorization: string | undefined,
     reply: { code(statusCode: number): { send(payload: ApiProblem): unknown } },
@@ -504,6 +577,47 @@ function parseRouteId(params: unknown): string | undefined {
     return undefined;
   }
   return params.transactionId;
+}
+
+function parseQuickAdd(body: unknown, includeCreationFields: true): QuickAddRequest | undefined;
+function parseQuickAdd(
+  body: unknown,
+  includeCreationFields: false,
+): Pick<QuickAddRequest, 'amountCents' | 'bookingDate' | 'sourceDescription'> | undefined;
+function parseQuickAdd(body: unknown, includeCreationFields: boolean) {
+  if (!isRecord(body)) return undefined;
+  const expectedKeys = includeCreationFields ? 5 : 3;
+  if (
+    Object.keys(body).length !== expectedKeys ||
+    typeof body.amountCents !== 'number' ||
+    !Number.isSafeInteger(body.amountCents) ||
+    body.amountCents <= 0 ||
+    typeof body.bookingDate !== 'string' ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(body.bookingDate) ||
+    typeof body.sourceDescription !== 'string' ||
+    body.sourceDescription.trim().length === 0
+  )
+    return undefined;
+  if (!includeCreationFields)
+    return {
+      amountCents: body.amountCents,
+      bookingDate: body.bookingDate,
+      sourceDescription: body.sourceDescription,
+    };
+  if (
+    typeof body.accountExternalId !== 'string' ||
+    body.accountExternalId.trim().length === 0 ||
+    typeof body.idempotencyKey !== 'string' ||
+    !/^[A-Za-z0-9._:-]{1,128}$/.test(body.idempotencyKey)
+  )
+    return undefined;
+  return {
+    accountExternalId: body.accountExternalId,
+    amountCents: body.amountCents,
+    bookingDate: body.bookingDate,
+    idempotencyKey: body.idempotencyKey,
+    sourceDescription: body.sourceDescription,
+  };
 }
 
 function isValidAccountFields(body: Record<string, unknown>): boolean {

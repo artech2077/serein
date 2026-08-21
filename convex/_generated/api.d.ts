@@ -10,6 +10,7 @@
 
 import type * as classifications from "../classifications.js";
 import type * as imports from "../imports.js";
+import type * as quick_adds from "../quick_adds.js";
 import type * as workspaces from "../workspaces.js";
 
 import type {
@@ -21,6 +22,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   classifications: typeof classifications;
   imports: typeof imports;
+  quick_adds: typeof quick_adds;
   workspaces: typeof workspaces;
 }>;
 

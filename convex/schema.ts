@@ -58,6 +58,22 @@ export default defineSchema({
     merchantKey: v.string(),
     subject: v.string(),
   }).index('by_subject_and_merchant_key', ['subject', 'merchantKey']),
+  quickAdds: defineTable({
+    accountId: v.id('financeAccounts'),
+    amountCents: v.number(),
+    bookingDate: v.string(),
+    matchKey: v.string(),
+    merchantKey: v.string(),
+    sourceDescription: v.string(),
+    state: v.union(v.literal('provisional'), v.literal('matched'), v.literal('review_required')),
+    subject: v.string(),
+  }).index('by_subject_and_match_key', ['subject', 'matchKey']),
+  quickAddReceipts: defineTable({
+    idempotencyKey: v.string(),
+    quickAddId: v.id('quickAdds'),
+    requestFingerprint: v.string(),
+    subject: v.string(),
+  }).index('by_subject_and_idempotency_key', ['subject', 'idempotencyKey']),
   savedCsvMappings: defineTable({
     amountColumn: v.string(),
     dateColumn: v.string(),

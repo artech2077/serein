@@ -80,6 +80,26 @@ export interface MaterialReviewQueue {
   unresolvedDebitCents: number;
 }
 
+export interface QuickAddRequest {
+  accountExternalId: string;
+  amountCents: number;
+  bookingDate: string;
+  idempotencyKey: string;
+  sourceDescription: string;
+}
+
+export interface QuickAddPreview {
+  allowanceImpactCents: number;
+}
+
+export interface PendingQuickAdd {
+  amountCents: number;
+  bookingDate: string;
+  quickAddId: string;
+  sourceDescription: string;
+  state: 'provisional' | 'review_required';
+}
+
 export interface ApiProblem {
   error: {
     code: string;

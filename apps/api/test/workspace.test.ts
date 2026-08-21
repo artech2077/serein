@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AccessTokenVerifier } from '../src/auth.js';
 import { buildApp } from '../src/app.js';
 import type { FinanceImportStore } from '../src/finance-import-store.js';
+import type { QuickAddStore } from '../src/quick-add-store.js';
 import { InMemoryWorkspaceStore } from '../src/workspace-store.js';
 
 const readToken = 'read-token';
@@ -10,7 +11,9 @@ const writeToken = 'write-token';
 const fullToken = 'full-token';
 const secondUserToken = 'second-user-token';
 
-function buildTestApp(financeImportStore?: FinanceImportStore) {
+function buildTestApp(
+  options: { financeImportStore?: FinanceImportStore; quickAddStore?: QuickAddStore } = {},
+) {
   const accessTokenVerifier: AccessTokenVerifier = {
     verify: vi.fn(async (token) => {
       const identities = {
@@ -43,7 +46,8 @@ function buildTestApp(financeImportStore?: FinanceImportStore) {
 
   return buildApp({
     accessTokenVerifier,
-    financeImportStore,
+    financeImportStore: options.financeImportStore,
+    quickAddStore: options.quickAddStore,
     workspaceStore: new InMemoryWorkspaceStore(),
   });
 }
@@ -209,7 +213,7 @@ describe('workspace authorization boundary', () => {
         state: 'manual',
       })),
     };
-    const app = buildTestApp(financeImportStore);
+    const app = buildTestApp({ financeImportStore });
     apps.push(app);
 
     const imported = await app.inject({
@@ -255,6 +259,59 @@ describe('workspace authorization boundary', () => {
     expect(financeImportStore.importCsv).toHaveBeenCalledWith(
       'auth0|primary-user',
       expect.objectContaining({ accountExternalId: 'checking', idempotencyKey: 'import-1' }),
+      fullToken,
+    );
+  });
+
+  it('routes authenticated Quick Add previews, creation, and pending items through the backend store', async () => {
+    const quickAddStore: QuickAddStore = {
+      create: vi.fn(async () => ({ outcome: 'applied', quickAddId: 'quick-add_123' })),
+      getPending: vi.fn(async () => [
+        {
+          amountCents: 450,
+          bookingDate: '2026-08-21',
+          quickAddId: 'quick-add_123',
+          sourceDescription: 'Corner Cafe',
+          state: 'provisional',
+        },
+      ]),
+      preview: vi.fn(async () => ({ allowanceImpactCents: -450 })),
+    };
+    const app = buildTestApp({ quickAddStore });
+    apps.push(app);
+    const previewPayload = {
+      amountCents: 450,
+      bookingDate: '2026-08-21',
+      sourceDescription: 'Corner Cafe',
+    };
+
+    const preview = await app.inject({
+      headers: bearer(readToken),
+      method: 'POST',
+      payload: previewPayload,
+      url: '/v1/quick-adds/preview',
+    });
+    const created = await app.inject({
+      headers: bearer(fullToken),
+      method: 'POST',
+      payload: { ...previewPayload, accountExternalId: 'checking', idempotencyKey: 'coffee-now' },
+      url: '/v1/quick-adds',
+    });
+    const pending = await app.inject({
+      headers: bearer(readToken),
+      method: 'GET',
+      url: '/v1/quick-adds',
+    });
+
+    expect(preview.statusCode).toBe(200);
+    expect(preview.json()).toEqual({ allowanceImpactCents: -450 });
+    expect(created.statusCode).toBe(201);
+    expect(created.json()).toEqual({ outcome: 'applied', quickAddId: 'quick-add_123' });
+    expect(pending.statusCode).toBe(200);
+    expect(pending.json()).toHaveLength(1);
+    expect(quickAddStore.create).toHaveBeenCalledWith(
+      'auth0|primary-user',
+      expect.objectContaining({ accountExternalId: 'checking', idempotencyKey: 'coffee-now' }),
       fullToken,
     );
   });
