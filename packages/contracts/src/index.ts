@@ -162,6 +162,45 @@ export interface CashFlowSafetyResult {
   safe: boolean;
 }
 
+export type MonthlyPlanState = 'awaiting_approval' | 'active' | 'revision_proposed';
+
+export type SalaryStatus = 'forecast' | 'received' | 'late_conservative';
+
+export interface MonthlyPlanProposalCommand {
+  expectedSalaryEnd: string;
+  expectedSalaryStart: string;
+  forecastSalaryCents: number;
+  idempotencyKey: string;
+  month: string;
+  proposedBaseDailyAllowanceCents: number;
+  receivedIncomeCents?: number;
+}
+
+export interface MonthlyPlanRevisionCommand {
+  idempotencyKey: string;
+  materialEventId: string;
+  minimumMaterialChangeCents: number;
+  month: string;
+  proposedBaseDailyAllowanceCents: number;
+  version: number;
+}
+
+export interface MonthlyPlanProjection {
+  approvedBaseDailyAllowanceCents?: number;
+  month: string;
+  proposedBaseDailyAllowanceCents: number;
+  salary: {
+    conservativeIncomeCents: number;
+    expectedSalaryEnd: string;
+    expectedSalaryStart: string;
+    forecastSalaryCents: number;
+    receivedIncomeCents?: number;
+    status: SalaryStatus;
+  };
+  state: MonthlyPlanState;
+  version: number;
+}
+
 export interface ApiProblem {
   error: {
     code: string;

@@ -12,6 +12,7 @@ import type * as classifications from "../classifications.js";
 import type * as deferred_cards from "../deferred_cards.js";
 import type * as goals from "../goals.js";
 import type * as imports from "../imports.js";
+import type * as monthly_plans from "../monthly_plans.js";
 import type * as quick_adds from "../quick_adds.js";
 import type * as workspaces from "../workspaces.js";
 
@@ -26,6 +27,7 @@ declare const fullApi: ApiFromModules<{
   deferred_cards: typeof deferred_cards;
   goals: typeof goals;
   imports: typeof imports;
+  monthly_plans: typeof monthly_plans;
   quick_adds: typeof quick_adds;
   workspaces: typeof workspaces;
 }>;
