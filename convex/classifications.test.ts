@@ -43,6 +43,39 @@ describe('transaction classification and material review', () => {
     expect(after.unresolvedDebitCents).toBeGreaterThan(0);
   });
 
+  it('records AI suggestions without removing material spending from review, and only accepts eligible transfers', async () => {
+    const t = convexTest(schema, modules).withIdentity(identity);
+    await importTransactions(t);
+    const queue = await t.query(api.classifications.getMaterialReviewQueue, {});
+    const first = queue.items[0];
+    const second = queue.items[1];
+    if (!first || !second) throw new Error('Expected reviewable transactions.');
+
+    await t.mutation(api.classifications.saveAiSuggestion, {
+      classification: 'essential',
+      confidence: 0.99,
+      transactionId: first.transactionId as Id<'importedTransactions'>,
+    });
+    const afterEssentialSuggestion = await t.query(api.classifications.getMaterialReviewQueue, {});
+    expect(afterEssentialSuggestion.items).toHaveLength(2);
+    expect(afterEssentialSuggestion.items[0]).toMatchObject({
+      aiClassification: 'essential',
+      aiConfidence: 0.99,
+    });
+
+    await t.mutation(api.classifications.saveAiSuggestion, {
+      classification: 'transfer',
+      confidence: 0.95,
+      transactionId: second.transactionId as Id<'importedTransactions'>,
+    });
+    await t.mutation(api.classifications.acceptNonAllowanceAiSuggestion, {
+      transactionId: second.transactionId as Id<'importedTransactions'>,
+    });
+    const afterTransfer = await t.query(api.classifications.getMaterialReviewQueue, {});
+    expect(afterTransfer.items).toHaveLength(1);
+    expect(afterTransfer.items[0]).toMatchObject({ aiClassification: 'essential' });
+  });
+
   it('applies merchant corrections one time, retrospectively, or prospectively', async () => {
     const t = convexTest(schema, modules).withIdentity(identity);
     await importTransactions(t);

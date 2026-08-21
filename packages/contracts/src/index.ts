@@ -69,6 +69,8 @@ export type ConfirmedTransactionClassification =
   'discretionary' | 'essential' | 'transfer' | 'refund';
 
 export interface MaterialReviewItem {
+  aiClassification?: ConfirmedTransactionClassification;
+  aiConfidence?: number;
   amountCents: number;
   bookingDate: string;
   sourceDescription: string;

@@ -18,6 +18,14 @@ import {
   type AccessTokenVerifier,
   type AuthenticatedIdentity,
 } from './auth.js';
+import { AiClassificationService, type ClassificationProposalStore } from './ai-classification.js';
+import {
+  AiBudgetExceededError,
+  AiGateway,
+  AiGatewayUnavailableError,
+  ConvexAiUsageLedger,
+  OpenAiResponsesClient,
+} from './ai-gateway.js';
 import { ConvexWorkspaceStore, getConvexUrl } from './convex-workspace-store.js';
 import { ConvexDeferredCardStore, type DeferredCardStore } from './deferred-card-store.js';
 import {
@@ -37,6 +45,7 @@ const API_VERSION = 'v1' as const;
 
 export interface BuildAppOptions {
   accessTokenVerifier?: AccessTokenVerifier;
+  aiClassificationService?: AiClassificationService;
   deferredCardStore?: DeferredCardStore;
   financeClassificationStore?: FinanceClassificationStore;
   financeImportStore?: FinanceImportStore;
@@ -56,6 +65,13 @@ export function buildApp(options: BuildAppOptions = {}) {
   const financeClassificationStore =
     options.financeClassificationStore ??
     (convexUrl ? new ConvexFinanceClassificationStore(convexUrl) : undefined);
+  const aiClassificationService =
+    options.aiClassificationService ??
+    createAiClassificationService(
+      convexUrl,
+      financeClassificationStore,
+      process.env.OPENAI_API_KEY,
+    );
   const quickAddStore =
     options.quickAddStore ?? (convexUrl ? new ConvexQuickAddStore(convexUrl) : undefined);
   const accessTokenVerifier =
@@ -299,6 +315,58 @@ export function buildApp(options: BuildAppOptions = {}) {
       { classification, transactionId },
       authenticatedRequest.accessToken,
     );
+  });
+
+  app.post('/v1/transactions/ai-classification/propose', async (request, reply) => {
+    const authenticatedRequest = await authenticate(request.headers.authorization, reply);
+    if (
+      !authenticatedRequest ||
+      !requireScope(authenticatedRequest.identity, 'write:workspace', reply)
+    ) {
+      return;
+    }
+    const classificationRequest = parseAiClassificationRequest(request.body);
+    if (!classificationRequest) {
+      return reply
+        .code(400)
+        .send(
+          problem(
+            'invalid_ai_classification_request',
+            'Provide a request ID and between one and fifty transaction IDs.',
+          ),
+        );
+    }
+    if (!financeClassificationStore || !aiClassificationService) {
+      return reply
+        .code(503)
+        .send(
+          problem(
+            'ai_classification_not_configured',
+            'Configure the Convex workspace and server-side OpenAI gateway.',
+          ),
+        );
+    }
+    try {
+      const candidates = await financeClassificationStore.getAiClassificationCandidates(
+        authenticatedRequest.identity.subject,
+        classificationRequest.transactionIds,
+        authenticatedRequest.accessToken,
+      );
+      return aiClassificationService.propose(
+        authenticatedRequest.identity.subject,
+        authenticatedRequest.accessToken,
+        classificationRequest.requestId,
+        candidates,
+      );
+    } catch (error) {
+      if (error instanceof AiBudgetExceededError) {
+        return reply.code(429).send(problem('ai_budget_exceeded', error.message));
+      }
+      if (error instanceof AiGatewayUnavailableError) {
+        return reply.code(503).send(problem('ai_gateway_unavailable', error.message));
+      }
+      throw error;
+    }
   });
 
   app.post('/v1/transactions/:transactionId/merchant-correction', async (request, reply) => {
@@ -626,6 +694,82 @@ function parseClassification(body: unknown): ConfirmedTransactionClassification 
     return undefined;
   }
   return isConfirmedClassification(body.classification) ? body.classification : undefined;
+}
+
+function parseAiClassificationRequest(body: unknown) {
+  if (
+    !isRecord(body) ||
+    typeof body.requestId !== 'string' ||
+    !Array.isArray(body.transactionIds)
+  ) {
+    return undefined;
+  }
+  const transactionIds = body.transactionIds;
+  if (
+    !/^[A-Za-z0-9._:-]{1,128}$/.test(body.requestId) ||
+    transactionIds.length === 0 ||
+    transactionIds.length > 50 ||
+    !transactionIds.every((id) => typeof id === 'string' && id.length > 0)
+  ) {
+    return undefined;
+  }
+  return { requestId: body.requestId, transactionIds };
+}
+
+function createAiClassificationService(
+  convexUrl: string | undefined,
+  classificationStore: FinanceClassificationStore | undefined,
+  openAiApiKey: string | undefined,
+) {
+  if (!convexUrl || !classificationStore || !openAiApiKey) return undefined;
+  const monthlyBudgetNanoEur = 5_000_000_000;
+  const monthlyPlanningReserveNanoEur = 500_000_000;
+  const proposalStore: ClassificationProposalStore = {
+    acceptNonAllowanceAiSuggestion(subject, transactionId, accessToken) {
+      return classificationStore.acceptNonAllowanceAiSuggestion(
+        subject,
+        transactionId,
+        accessToken,
+      );
+    },
+    saveAiSuggestion(subject, transactionId, proposal, accessToken) {
+      return classificationStore.saveAiSuggestion(
+        subject,
+        {
+          classification: proposal.classification,
+          confidence: proposal.confidence,
+          transactionId,
+        },
+        accessToken,
+      );
+    },
+  };
+  return new AiClassificationService(
+    (accessToken) =>
+      new AiGateway(
+        new OpenAiResponsesClient(openAiApiKey),
+        new ConvexAiUsageLedger(
+          convexUrl,
+          accessToken,
+          monthlyBudgetNanoEur,
+          monthlyPlanningReserveNanoEur,
+        ),
+        { monthlyBudgetNanoEur, monthlyPlanningReserveNanoEur },
+      ),
+    proposalStore,
+    {
+      calibrationAccuracyThreshold: configuredFraction(
+        process.env.AI_CLASSIFICATION_CALIBRATION_ACCURACY_THRESHOLD,
+        0.9,
+      ),
+      highConfidenceThreshold: 0.9,
+    },
+  );
+}
+
+function configuredFraction(value: string | undefined, fallback: number) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 && parsed <= 1 ? parsed : fallback;
 }
 
 function parseMerchantCorrection(body: unknown):

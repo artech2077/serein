@@ -9,6 +9,7 @@ export interface AiEvidence {
   amountCents: number;
   date: string;
   kind: AiEvidenceKind;
+  merchantHint?: string;
 }
 
 export interface AiGatewayCommand {
@@ -36,6 +37,7 @@ export type AiGatewayOutput =
 
 export interface ResponsesApiRequest {
   input: string;
+  instructions?: string;
   maxOutputTokens: number;
   model: 'gpt-5.6-luna' | 'gpt-5.6-terra';
   reasoning: { effort: 'low' | 'medium' };
@@ -338,6 +340,7 @@ export class OpenAiResponsesClient implements ResponsesApiClient {
     const response = await this.fetchImpl('https://api.openai.com/v1/responses', {
       body: JSON.stringify({
         input: request.input,
+        instructions: request.instructions,
         max_output_tokens: request.maxOutputTokens,
         model: request.model,
         reasoning: request.reasoning,
@@ -365,10 +368,15 @@ function toResponsesRequest(command: AiGatewayCommand): ResponsesApiRequest {
         amountCents: item.amountCents,
         date: item.date,
         kind: item.kind,
+        merchantHint: item.merchantHint,
         reference: `evidence_${index + 1}`,
       })),
       task: command.task,
     }),
+    instructions:
+      command.task === 'routine_classification'
+        ? 'Classify each normalized transaction evidence item. Return only the requested JSON. Use the supplied classification labels; do not infer personal details or explain your answer.'
+        : 'Provide only the requested JSON planning suggestions. Do not make changes or claim that any plan has been approved.',
     maxOutputTokens: maxOutputTokensByTask[command.task],
     model,
     reasoning: { effort: command.task === 'monthly_planning' ? 'medium' : 'low' },
@@ -453,7 +461,9 @@ function validateCommand(value: AiGatewayCommand) {
       (item) =>
         !Number.isSafeInteger(item.amountCents) ||
         !/^\d{4}-\d{2}-\d{2}$/.test(item.date) ||
-        !isEvidenceKind(item.kind),
+        !isEvidenceKind(item.kind) ||
+        (item.merchantHint !== undefined &&
+          (item.merchantHint.trim().length === 0 || item.merchantHint.length > 80)),
     )
   )
     throw new Error('Invalid bounded AI request.');

@@ -30,6 +30,15 @@ export default defineSchema({
   }).index('by_subject_and_external_id', ['subject', 'accountExternalId']),
   importedTransactions: defineTable({
     accountId: v.id('financeAccounts'),
+    aiClassification: v.optional(
+      v.union(
+        v.literal('discretionary'),
+        v.literal('essential'),
+        v.literal('transfer'),
+        v.literal('refund'),
+      ),
+    ),
+    aiConfidence: v.optional(v.number()),
     amountCents: v.number(),
     bookingDate: v.string(),
     classification: v.union(
